@@ -166,7 +166,7 @@ Sometimes it's handy to do all this in reverse by first lifting a function and t
 ```scala
 implicit def fnCofunctor[A,B](g: A => B) =
   new {
-    def <%>[C](x: Either[C,A]) = x map g
+    def <%>[Z](x: Either[Z,A]) = x map g
   }
 ```
 

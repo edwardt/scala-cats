@@ -17,7 +17,7 @@ object EitherFunctor {
 
   implicit def fnCofunctor[A,B](g: A => B) =
     new {
-      def <%>[C](x: Either[C,A]) = x map g
+      def <%>[Z](x: Either[Z,A]) = x map g
     }
 
 }
