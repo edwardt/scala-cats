@@ -1,5 +1,31 @@
-# Hands-On Category Theory
+# Hands-on Category Theory
 
+In this tutorial we implement in Scala some basic ideas from category theory.  The goal is to produce a library that can be used in production for bridging an "unsafe" public api and a "safe" private api.  In particular, we look at how to validate input and safely compose it with functions that don't know (or care) about validation.
+
+When we're done, we'll be able to write code like this:
+
+```scala
+scala> val fortyTwo = add2 <%> atoi("20") <*> atoi("22")
+fortyTwo: scala.util.Either[List[String],Int] = Right(42)
+```
+
+From category theory, we implement representations of the following:
+
+* [Functor](http://en.wikipedia.org/wiki/Functor)
+* [Semigroup](http://en.wikipedia.org/wiki/Semigroup)
+* [Applicative functor](http://en.wikibooks.org/wiki/Haskell/Applicative_Functors)
+
+We also make use of some interesting Scala features:
+
+* [Algebraic data types](http://en.wikipedia.org/wiki/Algebraic_data_type)
+* Type lambdas
+* [Higher-kinded types](http://en.wikipedia.org/wiki/Kind_%28type_theory%29)
+* Implicit conversions
+* Type classes
+
+For further reading, see:
+
+* [Validation](http://eed3si9n.com/learning-scalaz/Validation.html) (learning Scalaz)
 
 ## Introduction
 
@@ -29,7 +55,7 @@ To bridge the gap between the unsafe Web and our warm and fuzzy functional code,
 
 In the examples below, we focus specifically on Scala's `Either` data type, which takes one of two values:
 
-```
+```scala
 sealed abstract class Either[+A, +B]
 case class Left[+A, +B](a: A) extends Either[A, B]
 case class Right[+A, +B](b: B) extends Either[A, B]
@@ -41,7 +67,7 @@ By convention, `Left` captures "erroneous" or "invalid" values, and `Right` cont
 
 For example, consider the function `atoi`, which attempts to parse a string representation of an integer:
 
-```
+```scala
 def atoi(x: String): Either[String,Int] =
   try {
     Right(x.toInt)
@@ -52,7 +78,7 @@ def atoi(x: String): Either[String,Int] =
 
 If `x.toInt` succeeds, `atoi` returns a `Right` containing the parsed integer value.  If not, it returns a `Left` containing an error message:
 
-```
+```scala
 scala> val one = atoi("1")
 one: Either[String,Int] = Right(1)
 
@@ -64,13 +90,13 @@ two: Either[String,Int] = Left('two' is not an integer)
 
 Consider a simple absolute value function:
 
-```
+```scala
 val abs: Int => Int = math.abs
 ```
 
 The type of this function is `Int => Int`.  When we supply it an integer, we get back an integer.
 
-```
+```scala
 scala> val twenty = abs(-20)
 twenty: Int = 20
 ```
@@ -81,7 +107,7 @@ Now we want a nice way to apply our `abs` function if and only if `atoi` returns
 
 Given some `F[A]`, a functor lifts a function of type `A => B` to a function of type `F[A] => F[B]`.
 
-```
+```scala
 trait Functor[A,F[_]] {
   def map[B](f: A => B): F[B]
 }
@@ -104,7 +130,7 @@ We need to lift `Int => Int` to `F[Int] => F[Int]`, where `F[_]` is defined as `
 
 While we're at it, let's put it in an implicit function to implement a type class:
 
-```
+```scala
 implicit def eitherFunctor[A,Z](x: Either[Z,A]) =
   new Functor[A,({type EitherZ[B] = Either[Z,B]})#EitherZ] {
     override def map[B](f: A => B): Either[Z,B] =
@@ -117,7 +143,7 @@ implicit def eitherFunctor[A,Z](x: Either[Z,A]) =
 
 Now we can pimp `map` onto any `Either` instance:
 
-```
+```scala
 scala> val negativeTwenty: Either[String,Int] = Right(-20)
 negativeTwenty: Either[String,Int] = Right(-20)
 
@@ -127,7 +153,7 @@ twenty: scala.util.Either[String,Int] = Right(20)
 
 Finally, we can plug it into our `atoi` function:
 
-```
+```scala
 scala> val twenty = atoi("-20") map abs
 twenty: scala.util.Either[String,Int] = Right(20)
 
@@ -137,7 +163,7 @@ notTwenty: scala.util.Either[String,Int] = Left('negative twenty' is not an inte
 
 Sometimes it's handy to do all this in reverse by first lifting a function and then applying it to a lifted value:
 
-```
+```scala
 implicit def fnCofunctor[A,B](g: A => B) =
   new {
     def <%>[C](x: Either[C,A]) = x map g
@@ -146,7 +172,7 @@ implicit def fnCofunctor[A,B](g: A => B) =
 
 Now we can use `<%>` as an infix operator to implicity lift `abs` and apply it to a value returned by `atoi`:
 
-```
+```scala
 scala> val twenty = abs <%> atoi("-20")
 twenty: scala.util.Either[String,Int] = Right(20)
 ```
@@ -159,7 +185,7 @@ So far we've built enough code to cleanly parse some input and, if it is valid, 
 
 Now consider a higher arity function:
 
-```
+```scala
 val add2: Int => Int => Int = { x => y => x + y }
 ```
 
@@ -167,8 +193,8 @@ This function has two inputs.  To turn it into a Web service as before, we'll ne
 
 An applicative functor builds upon a functor with a way to apply an already-lifted function of type `F[A => B]` as a function of type `F[A] => F[B]`.
 
-```
-trait Applicative[A, F[_]] extends Functor[A, F] {
+```scala
+trait Applicative[A,F[_]] extends Functor[A,F] {
   def ap[B](f: F[A => B]): F[B]
 }
 ```
@@ -194,7 +220,7 @@ Note that `B` might itself be a function `C => D`, giving us another `ap`-able `
 
 Note also that, since we have multiple inputs to parse, we will potentially be capturing multiple error messages (one per input).  We need to change our parser slightly:
 
-```
+```scala
 def atoi(x: String): Either[List[String], Int] =
   try {
     Right(x.toInt)
@@ -207,13 +233,13 @@ Our parser now gives us either the parsed integer, or a list of error messages.
 
 To build up lists of errors without coupling ourselves to the `List` API, we introduce `Semigroup` to generalize the characteristic of "appendability":
 
-```
+```scala
 trait Semigroup[A] {
   def append(x: A): A
 }
 ```
 
-```
+```scala
 implicit def listSemigroup[A](x: List[A]): Semigroup[List[A]] =
   new Semigroup[List[A]] {
     override def append(y: List[A]) = x ++ y
@@ -222,8 +248,8 @@ implicit def listSemigroup[A](x: List[A]): Semigroup[List[A]] =
 
 Now we can bang out an applicative functor for `Either`.  As before, we'll put it in an implicit function:
 
-```
-implicit def EitherApplicative[A,Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) =
+```scala
+implicit def eitherApplicative[A,Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) =
   new Applicative[A,({type EitherZ[B] = Either[Z,B]})#EitherZ] {
     override def map[B](f: A => B) =
       x match {
@@ -248,25 +274,25 @@ implicit def EitherApplicative[A,Z](x: Either[Z,A])(implicit zs: Z => Semigroup[
 
 Now we can use `ap` on our parsed values:
 
-```
+```scala
 scala> val fortyTwo = atoi("20") ap (atoi("22") map add2)
 fortyTwo: scala.util.Either[List[String],Int] = Right(42)
 ```
 
-```
+```scala
 scala> val notFortyTwo = atoi("twenty") ap (atoi("twenty two") map add2)
 notFortyTwo: scala.util.Either[List[String],Int] = Left(List('twenty' is not an integer, 'twenty two' is not an integer))
 ```
 
 Again, it can be handy to do all this in reverse by first lifting a function and then applying it to a lifted value:
 
-```
+```scala
 implicit def fnCofunctor[A,B](g: A => B) =
   new {
     def <%>[Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) = x map g
   }
 
-implicit def EitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semigroup[Z]) =
+implicit def eitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semigroup[Z]) =
   new {
     def <*>(a: Either[Z,A]) = a ap f
   }
@@ -274,12 +300,12 @@ implicit def EitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semig
 
 Now we can implicity lift `add2` and apply it to two values returned by `atoi`:
 
-```
+```scala
 scala> val fortyTwo = add2 <%> atoi("20") <*> atoi("22")
 fortyTwo: scala.util.Either[List[String],Int] = Right(42)
 ```
 
-```
+```scala
 scala> val notFortyTwo = add2 <%> atoi("twenty") <*> atoi("twenty two")
 notFortyTwo: scala.util.Either[List[String],Int] = Left(List('twenty two' is not an integer, 'twenty' is not an integer))
 ```
@@ -288,7 +314,7 @@ Note the difference in evaluation order -- the error messages are returned in th
 
 We can combine `<%>` and `<*>` as needed:
 
-```
+```scala
 scala> val fortyTwo = add2 <%> (abs <%> atoi("-20")) <*> atoi("22")
 fortyTwo: scala.util.Either[List[String],Int] = Right(42)
 ```
