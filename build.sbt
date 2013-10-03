@@ -13,6 +13,3 @@ scalacOptions += "-language:higherKinds"
 
 // allow implicits, e.g. `implicit def listSemigroup`
 scalacOptions += "-language:implicitConversions"
-
-// allow reflective access, e.g. `abs <%> ...`
-scalacOptions += "-language:reflectiveCalls"

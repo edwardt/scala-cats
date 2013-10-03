@@ -37,14 +37,12 @@ object EitherApplicative {
         }
     }
 
-  implicit def fnCofunctor[A,B](g: A => B) =
-    new {
-      def <%>[Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) = x map g
-    }
+  implicit class FnCofunctor[A,B](g: A => B) {
+    def <%>[Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) = x map g
+  }
 
-  implicit def eitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semigroup[Z]) =
-    new {
-      def <*>(a: Either[Z,A]) = a ap f
-    }
+  implicit class EitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semigroup[Z]) {
+    def <*>(a: Either[Z,A]) = a ap f
+  }
 
 }

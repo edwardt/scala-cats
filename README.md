@@ -164,10 +164,9 @@ notTwenty: scala.util.Either[String,Int] = Left('negative twenty' is not an inte
 Sometimes it's handy to do all this in reverse by first lifting a function and then applying it to a lifted value:
 
 ```scala
-implicit def fnCofunctor[A,B](g: A => B) =
-  new {
-    def <%>[Z](x: Either[Z,A]) = x map g
-  }
+implicit class FnCofunctor[A,B](g: A => B) {
+  def <%>[Z](x: Either[Z,A]) = x map g
+}
 ```
 
 Now we can use `<%>` as an infix operator to implicity lift `abs` and apply it to a value returned by `atoi`:
@@ -287,15 +286,13 @@ notFortyTwo: scala.util.Either[List[String],Int] = Left(List('twenty' is not an 
 Again, it can be handy to do all this in reverse by first lifting a function and then applying it to a lifted value:
 
 ```scala
-implicit def fnCofunctor[A,B](g: A => B) =
-  new {
-    def <%>[Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) = x map g
-  }
+implicit class FnCofunctor[A,B](g: A => B) {
+  def <%>[Z](x: Either[Z,A])(implicit zs: Z => Semigroup[Z]) = x map g
+}
 
-implicit def eitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semigroup[Z]) =
-  new {
-    def <*>(a: Either[Z,A]) = a ap f
-  }
+implicit class EitherCofunctor[A,B,Z](f: Either[Z,A => B])(implicit zs: Z => Semigroup[Z]) {
+  def <*>(a: Either[Z,A]) = a ap f
+}
 ```
 
 Now we can implicity lift `add2` and apply it to two values returned by `atoi`:
